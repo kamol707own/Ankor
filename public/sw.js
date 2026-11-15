@@ -1,4 +1,4 @@
-const CACHE = 'ankor-v1';
+const CACHE = 'ankor-v2';
 const ASSETS = [
   '/',
   '/index.html',
