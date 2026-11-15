@@ -1,7 +1,8 @@
-const CACHE = 'ankor-v2';
+const CACHE = 'ankor-v3';
+// Only immutable, hashed-free static files are precached. The HTML shell is
+// deliberately NOT cached: a cached shell points at old asset hashes after a
+// deploy, which yields a completely unstyled page.
 const ASSETS = [
-  '/',
-  '/index.html',
   '/icon-192.png',
   '/icon-512.png',
   '/icon-maskable-512.png',
@@ -32,13 +33,14 @@ self.addEventListener('fetch', (event) => {
   // Let API calls (Supabase, AI providers, fonts) go straight to the network.
   if (url.origin !== self.location.origin) return;
 
-  // SPA navigation: network first, fall back to the cached shell.
+  // Always fetch the HTML shell from the network so it references the assets
+  // that actually exist in the current deployment.
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).catch(() => caches.match('/index.html')));
+    event.respondWith(fetch(request));
     return;
   }
 
-  // Static assets: cache first, then network.
+  // Hashed static assets are immutable → cache first.
   event.respondWith(
     caches.match(request).then((hit) => {
       if (hit) return hit;
