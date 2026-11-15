@@ -33,6 +33,30 @@
 
   <body>
     <div id="root"></div>
+    <script>
+      // One-time self-heal: drop any service worker / cache left from an older
+      // build, then reload. Prevents the "old HTML + deleted CSS" unstyled page.
+      (function () {
+        try {
+          var KEY = 'ankor-cache-reset-v3';
+          if (localStorage.getItem(KEY)) return;
+          localStorage.setItem(KEY, '1');
+          var done = false;
+          var reload = function () { if (done) return; done = true; location.reload(); };
+          if (!('serviceWorker' in navigator)) { reload(); return; }
+          navigator.serviceWorker.getRegistrations()
+            .then(function (regs) { return Promise.all(regs.map(function (r) { return r.unregister(); })); })
+            .then(function () {
+              if (!('caches' in window)) return;
+              return caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+              });
+            })
+            .then(reload)
+            .catch(reload);
+        } catch (e) { /* ignore */ }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
