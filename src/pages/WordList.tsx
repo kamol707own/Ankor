@@ -162,7 +162,7 @@ const WordList = () => {
       ) : (
         <div className="bg-card rounded-2xl card-elev p-4 flex items-center gap-3">
           <Button variant="ghost" size="icon"
-            onClick={() => void speakText(word.korean, { language: currentSet.language })}
+            onClick={() => void speakText(word.korean, { onError: (msg) => toast.error(msg) })}
             aria-label="Pronounce"
             className="h-11 w-11 shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition-colors"
           >

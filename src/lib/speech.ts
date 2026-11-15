@@ -150,18 +150,21 @@ export async function speakText(text: string, options: SpeechOptions = {}): Prom
   const voice = await waitForVoice(language, gender, request);
   if (request !== activeRequest) return false;
 
-  const utterance = new SpeechSynthesisUtterance(term);
-  utterance.lang = language;
-  utterance.rate = options.rate ?? 0.9;
-  if (voice) {
-    utterance.voice = voice;
-    // When we had to fall back to a voice from another language (e.g. an English
-    // male voice on a system with no Korean voice), align the utterance
-    // language with it so the browser actually uses the selected voice.
-    const voiceBase = voice.lang.toLowerCase().split('-')[0];
-    const requestedBase = language.toLowerCase().split('-')[0];
-    if (voiceBase !== requestedBase) utterance.lang = voice.lang;
+  // Never read the term with a voice from another language: that is what makes
+  // Korean words sound "wrong" on devices with no Korean TTS voice installed.
+  const requestedBase = language.toLowerCase().split('-')[0];
+  const voiceBase = voice ? voice.lang.toLowerCase().split('-')[0] : '';
+  if (!voice || voiceBase !== requestedBase) {
+    options.onError?.(
+      `No ${language} voice found. Install a ${language} text-to-speech voice in your device settings.`,
+    );
+    return false;
   }
+
+  const utterance = new SpeechSynthesisUtterance(term);
+  utterance.lang = voice.lang || language;
+  utterance.rate = options.rate ?? 0.9;
+  utterance.voice = voice;
 
   utterance.onstart = () => {
     if (request === activeRequest) options.onStart?.();

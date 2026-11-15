@@ -179,24 +179,19 @@ const Home = () => {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-foreground">Overview</h2>
           <div className="grid grid-cols-2 gap-3">
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl border border-due/25 bg-due/10 p-4"
-            >
-              <div className="text-xs font-semibold text-due">Due</div>
-              <div className="mt-1 text-3xl font-bold leading-none text-foreground">{totals.due}</div>
-              <div className="mt-1.5 text-xs text-muted-foreground">cards today</div>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              className="bg-due text-due-foreground rounded-2xl p-4 card-elev">
+              <div className="text-sm font-medium opacity-90">Due</div>
+              <div className="text-4xl font-bold mt-1">{totals.due}</div>
+              <div className="text-xs opacity-90 mt-1">cards today</div>
             </motion.div>
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
-              className="rounded-2xl border border-studied/25 bg-studied/10 p-4"
-            >
-              <div className="text-xs font-semibold text-studied">Studied</div>
-              <div className="mt-1 text-3xl font-bold leading-none text-foreground">{todaySession?.cards ?? 0}</div>
-              <div className="mt-1.5 text-xs text-muted-foreground">{todaySession?.minutes ?? 0} min today</div>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+              className="bg-studied text-studied-foreground rounded-2xl p-4 card-elev">
+              <div className="text-sm font-medium opacity-90">Studied</div>
+              <div className="text-4xl font-bold mt-1">{todaySession?.cards ?? 0}</div>
+              <div className="text-xs opacity-90 mt-1">
+                cards in {todaySession?.minutes ?? 0} minutes today
+              </div>
             </motion.div>
           </div>
         </section>

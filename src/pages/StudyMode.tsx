@@ -119,7 +119,6 @@ const StudyMode = () => {
   const handleSpeak = () => {
     if (!card) return;
     void speakText(card.korean, {
-      language: currentSet?.language,
       onError: (msg) => toast.error(msg),
     });
   };
