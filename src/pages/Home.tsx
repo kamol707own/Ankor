@@ -179,19 +179,24 @@ const Home = () => {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-foreground">Overview</h2>
           <div className="grid grid-cols-2 gap-3">
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              className="bg-due text-due-foreground rounded-2xl p-4 card-elev">
-              <div className="text-sm font-medium opacity-90">Due</div>
-              <div className="text-4xl font-bold mt-1">{totals.due}</div>
-              <div className="text-xs opacity-90 mt-1">cards today</div>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-2xl border border-due/25 bg-due/10 p-4"
+            >
+              <div className="text-xs font-semibold text-due">Due</div>
+              <div className="mt-1 text-3xl font-bold leading-none text-foreground">{totals.due}</div>
+              <div className="mt-1.5 text-xs text-muted-foreground">cards today</div>
             </motion.div>
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-              className="bg-studied text-studied-foreground rounded-2xl p-4 card-elev">
-              <div className="text-sm font-medium opacity-90">Studied</div>
-              <div className="text-4xl font-bold mt-1">{todaySession?.cards ?? 0}</div>
-              <div className="text-xs opacity-90 mt-1">
-                cards in {todaySession?.minutes ?? 0} minutes today
-              </div>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 }}
+              className="rounded-2xl border border-studied/25 bg-studied/10 p-4"
+            >
+              <div className="text-xs font-semibold text-studied">Studied</div>
+              <div className="mt-1 text-3xl font-bold leading-none text-foreground">{todaySession?.cards ?? 0}</div>
+              <div className="mt-1.5 text-xs text-muted-foreground">{todaySession?.minutes ?? 0} min today</div>
             </motion.div>
           </div>
         </section>
@@ -206,9 +211,17 @@ const Home = () => {
           </div>
 
           {vocabSets.length === 0 ? (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-              className="bg-card rounded-2xl card-elev p-8 text-center text-muted-foreground">
-              <p className="text-sm">No decks yet. Tap the <span className="text-primary font-semibold">+</span> to create one.</p>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="rounded-2xl border border-dashed border-border bg-card p-8 text-center"
+            >
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <NotebookPen className="h-6 w-6" />
+              </div>
+              <p className="text-sm font-medium text-foreground">No decks yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">Tap the + button below to create your first deck.</p>
             </motion.div>
           ) : (
             <div className="space-y-3">
