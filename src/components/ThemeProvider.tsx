@@ -53,6 +53,13 @@ export function ThemeProvider({
     root.classList.add(theme);
   }, [theme]);
 
+  // Keep the browser/status-bar colour in sync with the app's actual theme
+  // (the OS preference may differ from the theme chosen in the app).
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#292929' : '#F7F3EC');
+  }, [theme]);
+
   useEffect(() => {
     const preset = ACCENTS.find(a => a.key === accent) || ACCENTS[0];
     const root = window.document.documentElement;
