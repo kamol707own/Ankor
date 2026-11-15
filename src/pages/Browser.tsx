@@ -5,7 +5,7 @@ import { ArrowLeft, Search as SearchIcon, Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { VocabSet, Word, CardState } from '@/types/word';
+import { VocabSet, Word, CardState, mergeWordEdit } from '@/types/word';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import WordForm from '@/components/WordForm';
@@ -58,8 +58,8 @@ const Browser = () => {
   const handleSave = (data: Omit<Word, 'id' | 'createdAt'>) => {
     if (!editing) return;
     const { word, setId } = editing;
-    const updated: Word = { ...data, id: word.id, createdAt: word.createdAt };
-    setVocabSets(vocabSets.map(s => s.id === setId
+    const updated = mergeWordEdit(word, data);
+    setVocabSets(prev => prev.map(s => s.id === setId
       ? { ...s, words: s.words.map(w => w.id === word.id ? updated : w) }
       : s));
     toast.success('Card updated');
@@ -79,7 +79,10 @@ const Browser = () => {
 
       <motion.header initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="sticky top-0 z-30">
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -bottom-10 bg-background/30 backdrop-blur-[10px] [mask-image:linear-gradient(to_bottom,black_45%,transparent)]" />
-        <div className="relative container max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
+        <div
+          className="relative container max-w-2xl mx-auto px-4 py-4 flex items-center gap-3"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}
+        >
           <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>

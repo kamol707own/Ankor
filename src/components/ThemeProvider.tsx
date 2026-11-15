@@ -56,8 +56,14 @@ export function ThemeProvider({
   // Keep the browser/status-bar colour in sync with the app's actual theme
   // (the OS preference may differ from the theme chosen in the app).
   useEffect(() => {
-    const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', theme === 'dark' ? '#292929' : '#F7F3EC');
+    const color = theme === 'dark' ? '#292929' : '#F7F3EC';
+    document.querySelectorAll('meta[name="theme-color"]').forEach(m => {
+      m.setAttribute('content', color);
+      m.removeAttribute('media');
+    });
+    // Paint the html element itself too: on iOS standalone the area behind the
+    // status bar / home indicator shows the document background, not the meta.
+    document.documentElement.style.backgroundColor = color;
   }, [theme]);
 
   useEffect(() => {

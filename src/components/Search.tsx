@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Search as SearchIcon, X, BookOpen } from 'lucide-react';
+import { Search as SearchIcon, X, BookOpen, Volume2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { VocabSet, Word } from '@/types/word';
 import { Card } from '@/components/ui/card';
+import { speakText } from '@/lib/speech';
+import { toast } from 'sonner';
 
 interface SearchProps {
   vocabSets: VocabSet[];
@@ -13,6 +15,7 @@ interface SearchProps {
 
 interface SearchResult extends Word {
   setName: string;
+  language?: string;
 }
 
 const Search = ({ vocabSets, onClose }: SearchProps) => {
@@ -42,7 +45,7 @@ const Search = ({ vocabSets, onClose }: SearchProps) => {
         const matchesRoman = word.romanization?.toLowerCase().includes(query);
 
         if (matchesKorean || matchesUzbek || matchesRoman) {
-          results.push({ ...word, setName: set.name });
+          results.push({ ...word, setName: set.name, language: set.language });
         }
       });
     });
@@ -109,11 +112,25 @@ const Search = ({ vocabSets, onClose }: SearchProps) => {
                       <BookOpen className="h-3.5 w-3.5 shrink-0" />
                       <span className="truncate">{result.setName}</span>
                     </div>
-                    <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1 mb-1.5">
-                      <span className="text-xl font-semibold break-words max-w-full">{result.korean}</span>
-                      <span className="text-sm text-muted-foreground break-words max-w-full">
-                        {result.romanization}
-                      </span>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1 min-w-0">
+                        <span className="text-xl font-semibold break-words max-w-full">{result.korean}</span>
+                        <span className="text-sm text-muted-foreground break-words max-w-full">
+                          {result.romanization}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Pronounce ${result.korean}`}
+                        className="h-8 w-8 shrink-0 rounded-full text-muted-foreground"
+                        onClick={() => void speakText(result.korean, {
+                          language: result.language,
+                          onError: (msg) => toast.error(msg),
+                        })}
+                      >
+                        <Volume2 className="h-4 w-4" />
+                      </Button>
                     </div>
                     <p className="text-base break-words">{result.uzbek}</p>
                     {result.example && (

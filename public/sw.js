@@ -1,4 +1,4 @@
-const CACHE = 'ankor-v3';
+const CACHE = 'ankor-v4';
 // Only immutable, hashed-free static files are precached. The HTML shell is
 // deliberately NOT cached: a cached shell points at old asset hashes after a
 // deploy, which yields a completely unstyled page.

@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Environment config (contains the Supabase project URL + anon key)
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

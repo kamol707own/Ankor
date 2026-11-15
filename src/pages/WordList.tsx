@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import WordForm from '@/components/WordForm';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { VocabSet, Word, SortOption } from '@/types/word';
+import { VocabSet, Word, SortOption, mergeWordEdit } from '@/types/word';
 import { toast } from 'sonner';
 import { speakText } from '@/lib/speech';
 import { categorizeWords } from '@/lib/categorize';
@@ -78,7 +78,12 @@ const WordList = () => {
   }
 
   const persistSet = (updated: VocabSet) => {
-    setVocabSets(vocabSets.map(s => s.id === setId ? updated : s));
+    setVocabSets(prev => prev.map(s => s.id === setId ? updated : s));
+  };
+
+  /** Update words relative to the latest stored deck, never a stale snapshot. */
+  const updateWords = (fn: (words: Word[]) => Word[]) => {
+    setVocabSets(prev => prev.map(s => s.id === setId ? { ...s, words: fn(s.words) } : s));
   };
 
   const startEditName = () => {
@@ -101,21 +106,21 @@ const WordList = () => {
 
   const handleAddWord = (wordData: Omit<Word, 'id' | 'createdAt'>) => {
     const newWord: Word = { ...wordData, id: Date.now(), set: currentSet.name, createdAt: Date.now() };
-    persistSet({ ...currentSet, words: [...currentSet.words, newWord] });
+    updateWords(words => [...words, newWord]);
     setShowForm(false);
     toast.success('Word added');
   };
 
   const handleUpdateWord = (wordData: Omit<Word, 'id' | 'createdAt'>) => {
     if (!editingWord) return;
-    const updatedWord: Word = { ...wordData, id: editingWord.id, createdAt: editingWord.createdAt };
-    persistSet({ ...currentSet, words: currentSet.words.map(w => w.id === editingWord.id ? updatedWord : w) });
+    const updatedWord = mergeWordEdit(editingWord, wordData);
+    updateWords(words => words.map(w => w.id === editingWord.id ? updatedWord : w));
     setEditingWord(null);
     toast.success('Word updated');
   };
 
   const handleDeleteWord = (wordId: number) => {
-    persistSet({ ...currentSet, words: currentSet.words.filter(w => w.id !== wordId) });
+    updateWords(words => words.filter(w => w.id !== wordId));
     toast.success('Word deleted');
   };
 
@@ -148,7 +153,7 @@ const WordList = () => {
   };
 
   const handleClearCategories = () => {
-    persistSet({ ...currentSet, words: currentSet.words.map(w => ({ ...w, category: undefined })) });
+    updateWords(words => words.map(w => ({ ...w, category: undefined })));
     toast.success('Categories cleared');
   };
 
@@ -162,7 +167,7 @@ const WordList = () => {
       ) : (
         <div className="bg-card rounded-2xl card-elev p-4 flex items-center gap-3">
           <Button variant="ghost" size="icon"
-            onClick={() => void speakText(word.korean, { onError: (msg) => toast.error(msg) })}
+            onClick={() => void speakText(word.korean, { language: currentSet.language, onError: (msg) => toast.error(msg) })}
             aria-label="Pronounce"
             className="h-11 w-11 shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition-colors"
           >

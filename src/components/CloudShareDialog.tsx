@@ -111,12 +111,23 @@ export const CloudShareDialog = ({ vocabSets, onImport, trigger }: CloudShareDia
         },
       ]);
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        // 23505 = unique_violation. Happens if the delete was blocked by RLS,
+        // or another device inserted the same deck concurrently.
+        if ((insertError as any).code === '23505') {
+          throw new Error('That deck name is already taken under this username.');
+        }
+        throw insertError;
+      }
       toast.success(`☁️ "${setToUpload.name}" uploaded to cloud!`);
       setSelectedSet('');
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error('Failed to upload set. Please try again.');
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Failed to upload set. Please try again.',
+      );
     } finally {
       setIsUploading(false);
     }
@@ -153,11 +164,20 @@ export const CloudShareDialog = ({ vocabSets, onImport, trigger }: CloudShareDia
         },
       ]);
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        if ((insertError as any).code === '23505') {
+          throw new Error('Notes are already uploaded under this username.');
+        }
+        throw insertError;
+      }
       toast.success('☁️ Your notes uploaded to cloud!');
     } catch (error) {
       console.error('Upload notes error:', error);
-      toast.error('Failed to upload notes. Please try again.');
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Failed to upload notes. Please try again.',
+      );
     } finally {
       setIsUploading(false);
     }

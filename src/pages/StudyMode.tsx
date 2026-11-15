@@ -6,11 +6,21 @@ import { useLocalStorage as useLS } from '@/hooks/useLocalStorage';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { VocabSet, Word } from '@/types/word';
 import { Button } from '@/components/ui/button';
-import { applyRating, previewIntervals, bucketCounts, Rating } from '@/lib/srs';
+import { applyRating, previewIntervals, bucketCounts, dayKey, Rating } from '@/lib/srs';
 import { toast } from 'sonner';
 import { cancelSpeech, speakText } from '@/lib/speech';
 
 interface StudySession { date: string; cards: number; minutes: number; }
+
+/** Fisher-Yates: unbiased, unlike sort() with a random comparator. */
+function shuffle<T>(items: T[]): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
 
 const StudyMode = () => {
   const navigate = useNavigate();
@@ -36,9 +46,16 @@ const StudyMode = () => {
     ratingLocked.current = false;
     setCompleted(false);
     const now = Date.now();
-    const due = (currentSet.words || []).filter(w => (w.due ?? 0) <= now);
-    const list = due.length > 0 ? due : [...(currentSet.words || [])];
-    setQueue(list.sort(() => Math.random() - 0.5));
+    const words = currentSet.words || [];
+    // New cards (never studied) are always fair game; scheduled cards only once
+    // their due date has passed. Falling back to "every card" would re-show
+    // cards just rated, making the session repeat itself.
+    const eligible = words.filter(w => {
+      const state = w.state ?? 'new';
+      if (state === 'new' || !w.due) return true;
+      return w.due <= now;
+    });
+    setQueue(shuffle(eligible));
     setIndex(0);
     setRevealed(false);
   }, [setId, currentSet, navigate]);
@@ -49,27 +66,33 @@ const StudyMode = () => {
   const total = queue.length;
 
   const recordSession = (extra = 1) => {
-    const date = new Date().toISOString().slice(0, 10);
+    const date = dayKey();
     const minutes = Math.max(1, Math.round((Date.now() - startedAt) / 60000));
-    const others = sessions.filter(s => s.date !== date);
-    const existing = sessions.find(s => s.date === date);
-    setSessions([...others, {
-      date,
-      cards: (existing?.cards ?? 0) + extra,
-      minutes: Math.max(existing?.minutes ?? 0, minutes),
-    }]);
+    // Functional update: rapid rating clicks would otherwise all read the same
+    // stale `sessions` value and overwrite each other.
+    setSessions(prev => {
+      const existing = prev.find(s => s.date === date);
+      return [
+        ...prev.filter(s => s.date !== date),
+        {
+          date,
+          cards: (existing?.cards ?? 0) + extra,
+          minutes: Math.max(existing?.minutes ?? 0, minutes),
+        },
+      ];
+    });
   };
 
   const handleRate = (rating: Rating) => {
     if (!card || !currentSet || ratingLocked.current) return;
     ratingLocked.current = true;
     const updated = applyRating(card, rating);
-    // persist back into vocabSets
-    const newSets = vocabSets.map(s => s.id === currentSet.id ? {
+    // Persist via functional update so consecutive ratings compose instead of
+    // each overwriting the previous one with a stale snapshot.
+    setVocabSets(prev => prev.map(s => s.id === currentSet.id ? {
       ...s,
       words: s.words.map(w => w.id === card.id ? updated : w),
-    } : s);
-    setVocabSets(newSets);
+    } : s));
     recordSession(1);
     setRevealed(false);
 
@@ -119,6 +142,7 @@ const StudyMode = () => {
   const handleSpeak = () => {
     if (!card) return;
     void speakText(card.korean, {
+      language: currentSet?.language,
       onError: (msg) => toast.error(msg),
     });
   };
@@ -134,8 +158,9 @@ const StudyMode = () => {
 
   const toggleKnown = () => {
     if (!card) return;
-    if (knownWords.includes(card.id)) setKnownWords(knownWords.filter(id => id !== card.id));
-    else setKnownWords([...knownWords, card.id]);
+    setKnownWords(prev => prev.includes(card.id)
+      ? prev.filter(id => id !== card.id)
+      : [...prev, card.id]);
   };
 
   if (completed || !card || !currentSet) {
@@ -155,7 +180,10 @@ const StudyMode = () => {
       {/* Header */}
       <header className="sticky top-0 z-30">
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -bottom-10 bg-background/30 backdrop-blur-[10px] [mask-image:linear-gradient(to_bottom,black_45%,transparent)]" />
-        <div className="relative container max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
+        <div
+          className="relative container max-w-2xl mx-auto px-4 py-3 flex items-center gap-3"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
+        >
           <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>

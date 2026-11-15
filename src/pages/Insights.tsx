@@ -5,15 +5,16 @@ import { ArrowLeft, Flame, Sparkles, GraduationCap, RotateCw } from 'lucide-reac
 import { Button } from '@/components/ui/button';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { VocabSet } from '@/types/word';
-import { bucketCounts } from '@/lib/srs';
+import { bucketCounts, dayKey } from '@/lib/srs';
 
 interface StudySession { date: string; cards: number; minutes: number; }
 
-const DAY_MS = 86400000;
-
-function dayKey(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
+/** Step back n calendar days, immune to DST shifting the millisecond count. */
+const shiftDays = (d: Date, n: number) => {
+  const next = new Date(d);
+  next.setDate(next.getDate() + n);
+  return next;
+};
 
 const Insights = () => {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ const Insights = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(today.getTime() - i * DAY_MS);
+      const d = shiftDays(today, -i);
       const key = dayKey(d);
       const s = sessions.find(x => x.date === key);
       out.push({
@@ -48,10 +49,10 @@ const Insights = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     // Count today only if studied; otherwise start from yesterday
-    let cursor = set.has(dayKey(today)) ? new Date(today) : new Date(today.getTime() - DAY_MS);
+    let cursor = set.has(dayKey(today)) ? new Date(today) : shiftDays(today, -1);
     while (set.has(dayKey(cursor))) {
       n++;
-      cursor = new Date(cursor.getTime() - DAY_MS);
+      cursor = shiftDays(cursor, -1);
     }
     return n;
   }, [sessions]);
@@ -70,7 +71,10 @@ const Insights = () => {
 
       <header className="sticky top-0 z-30">
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -bottom-10 bg-background/30 backdrop-blur-[10px] [mask-image:linear-gradient(to_bottom,black_45%,transparent)]" />
-        <div className="relative container max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
+        <div
+          className="relative container max-w-2xl mx-auto px-4 py-4 flex items-center gap-3"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}
+        >
           <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>

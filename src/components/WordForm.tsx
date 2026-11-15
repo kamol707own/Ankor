@@ -29,8 +29,9 @@ const WordForm = ({ word, onSave, onCancel }: WordFormProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!term.trim() || !translation.trim()) return;
-    onSave({
-      ...word,
+    // Only the editable content fields live here. Scheduling state (interval,
+    // ease, due, lapses, state, isKnown) is preserved by the caller.
+    const edits: Partial<Word> = {
       set: word?.set,
       korean: term.trim(),
       uzbek: translation.trim(),
@@ -38,8 +39,8 @@ const WordForm = ({ word, onSave, onCancel }: WordFormProps) => {
       example: example.trim() || undefined,
       meaning: translation.trim(),
       category: word?.category,
-      isKnown: word?.isKnown || false,
-    });
+    };
+    onSave(word ? { ...word, ...edits } as Omit<Word, 'id' | 'createdAt'> : edits as Omit<Word, 'id' | 'createdAt'>);
   };
 
   return (

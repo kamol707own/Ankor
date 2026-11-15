@@ -4,7 +4,12 @@
 - [x] Remove the redundant Word List header while retaining deck navigation.
 - [x] Compact Browser cards and limit editing to the pencil control.
 - [x] Verify Word List, Browser filters/editing, study auto-voice, and live AI categorization.
-- [ ] Repair Korean pronunciation across Study, Flashcard, and Word List, including asynchronous voice loading.
-- [ ] Autofocus the Search overlay input without changing close behavior.
-- [ ] Add independent deck/progress/both reset choices with explicit confirmation and safe dependent-data cleanup.
+- [x] Autofocus the Search overlay input without changing close behavior.
+- [x] Add independent deck/progress/both reset choices with explicit confirmation and safe dependent-data cleanup.
+- [x] Repair pronunciation across Study, Flashcard, and Word List by threading each deck's language through every speakText call.
+- [x] Preserve SRS scheduling state when editing a word (interval/ease/due/lapses/state/isKnown).
+- [x] Use local calendar dates for daily counters and streaks instead of UTC.
+- [x] Make rating and session writes compose instead of overwriting from stale snapshots.
 - [ ] Run focused pronunciation, search, reset, and existing study/browser regression checks.
+- [ ] Add Supabase Auth and scope vocab_sets policies to auth.uid() (cloud share is currently unauthenticated).
+- [ ] Gate the Google Translate TTS fallback behind a setting; it is a third-party dependency.

@@ -6,6 +6,18 @@ const MIN_EASE = 1.3;
 const DAY = 24 * 60 * 60 * 1000;
 const MIN = 60 * 1000;
 
+/**
+ * Local calendar day key (YYYY-MM-DD).
+ * `toISOString()` yields UTC, which logs an evening review to tomorrow's date
+ * for anyone west of UTC — breaking streaks and daily counters.
+ */
+export function dayKey(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export interface SRSPreview {
   interval: number; // days (fractional ok)
   label: string;

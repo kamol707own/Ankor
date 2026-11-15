@@ -8,7 +8,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { VocabSet } from '@/types/word';
-import { bucketCounts } from '@/lib/srs';
+import { bucketCounts, dayKey } from '@/lib/srs';
 import { toast } from 'sonner';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -130,7 +130,7 @@ const Home = () => {
   const [notesOpen, setNotesOpen] = useState(false);
 
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = dayKey();
   const todaySession = sessions.find(s => s.date === today);
 
   const totals = vocabSets.reduce((acc, s) => {
@@ -142,7 +142,7 @@ const Home = () => {
   const handleImportSets = (newSets: VocabSet[]) => {
     const existing = new Set(vocabSets.map(s => s.name.toLowerCase()));
     const toAdd = newSets.filter(s => !existing.has(s.name.toLowerCase()));
-    if (toAdd.length) setVocabSets([...vocabSets, ...toAdd]);
+    if (toAdd.length) setVocabSets(prev => [...prev, ...toAdd]);
     const skipped = newSets.length - toAdd.length;
     if (skipped > 0) toast.info(`Skipped ${skipped} duplicate set(s)`);
   };
@@ -152,7 +152,10 @@ const Home = () => {
       {/* Header */}
       <header className="sticky top-0 z-40">
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -bottom-10 bg-background/30 backdrop-blur-[10px] [mask-image:linear-gradient(to_bottom,black_45%,transparent)]" />
-        <div className="relative container max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div
+          className="relative container max-w-2xl mx-auto px-4 py-4 flex items-center justify-between"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}
+        >
           <h1 className="text-2xl font-bold text-foreground">AnKor</h1>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" aria-label="Grammar notes" onClick={() => setNotesOpen(true)}>
@@ -231,7 +234,7 @@ const Home = () => {
                     set={set}
                     onStudy={() => navigate(`/study/${set.id}`)}
                     onEdit={() => navigate(`/words/${set.id}`)}
-                    onDelete={() => setVocabSets(vocabSets.filter(s => s.id !== set.id))}
+                    onDelete={() => setVocabSets(prev => prev.filter(s => s.id !== set.id))}
                   />
                 </motion.div>
               ))}

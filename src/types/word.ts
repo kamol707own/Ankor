@@ -39,3 +39,21 @@ export interface VocabSet {
 }
 
 export type SortOption = 'alphabetical' | 'date';
+
+/** Fields the scheduler owns. Edits must never drop these. */
+export const SRS_FIELDS = ['interval', 'ease', 'due', 'lapses', 'state', 'isKnown'] as const;
+
+/**
+ * Merge edited content onto an existing word while preserving scheduling state.
+ * Editing a term or translation must not reset the card to "new".
+ */
+export function mergeWordEdit(existing: Word, edits: Partial<Word>): Word {
+  const merged: Word = { ...existing, ...edits, id: existing.id, createdAt: existing.createdAt };
+  for (const field of SRS_FIELDS) {
+    if (field in existing) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (merged as any)[field] = existing[field];
+    }
+  }
+  return merged;
+}

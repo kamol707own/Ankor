@@ -115,6 +115,13 @@
   }
   *::-webkit-scrollbar { display: none; }
 
+  html {
+    /* Full-bleed safe areas: the app background must extend under the status
+       bar and home indicator instead of leaving an OS-coloured strip. */
+    @apply bg-background;
+    min-height: 100%;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
@@ -130,6 +137,19 @@
     background: linear-gradient(to top, hsl(var(--background) / 0.75), hsl(var(--background) / 0));
     backdrop-filter: blur(3px);
     mask-image: linear-gradient(to top, #000 35%, transparent);
+  }
+  /*
+   * Content dissolving into the nav bar. Uses the app background at full
+   * opacity at the bottom so the join with the bar below is invisible — the
+   * nav reads as part of the same surface, not a separate overlay.
+   */
+  .app-nav-fade {
+    background: linear-gradient(
+      to bottom,
+      hsl(var(--background) / 0) 0%,
+      hsl(var(--background) / 0.6) 45%,
+      hsl(var(--background)) 100%
+    );
   }
   .btn-glow {
     @apply transition-all duration-300 hover:scale-[1.02];

@@ -9,6 +9,7 @@ import {
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useTheme, ACCENTS } from '@/components/ThemeProvider';
 import { VocabSet, Word } from '@/types/word';
+import { dayKey } from '@/lib/srs';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -158,17 +159,26 @@ const Settings = () => {
 
   // Migrate a stale (retired) Gemini model id saved from an older build.
   useEffect(() => {
-    const resolved = resolveModel(aiConfig.provider, aiConfig.model);
-    if (resolved !== aiConfig.model) {
-      setAIConfig({ ...aiConfig, model: resolved });
-    }
+    setAIConfig(prev => {
+      const resolved = resolveModel(prev.provider, prev.model);
+      return resolved === prev.model ? prev : { ...prev, model: resolved };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const updateAIConfig = (patch: Partial<AIConfig>) => setAIConfig({ ...aiConfig, ...patch });
+  const updateAIConfig = (patch: Partial<AIConfig>) => setAIConfig(prev => ({ ...prev, ...patch }));
 
   const handleProviderChange = (provider: AIProvider) => {
-    setAIConfig({ provider, apiKey: aiConfig.apiKey, model: defaultModelFor(provider) });
+    setAIConfig(prev => ({ provider, apiKey: prev.apiKey, model: defaultModelFor(provider) }));
+  };
+
+  /** Apply a reminder change against the latest state, then persist it. */
+  const changeReminder = (fn: (r: typeof reminder) => typeof reminder) => {
+    setReminder(prev => {
+      const next = fn(prev);
+      saveReminder(next);
+      return next;
+    });
   };
 
   const toggleReminder = async (v: boolean) => {
@@ -179,29 +189,18 @@ const Settings = () => {
         return;
       }
     }
-    const next = { ...reminder, enabled: v };
-    setReminder(next);
-    saveReminder(next);
-    toast.success(v ? `Reminders on (${next.times.length})` : 'Reminders off');
+    changeReminder(r => ({ ...r, enabled: v }));
+    toast.success(v ? `Reminders on (${reminder.times.length})` : 'Reminders off');
   };
 
-  const changeReminderTime = (index: number, time: string) => {
-    const next = { ...reminder, times: reminder.times.map((t, i) => (i === index ? time : t)) };
-    setReminder(next);
-    saveReminder(next);
-  };
+  const changeReminderTime = (index: number, time: string) =>
+    changeReminder(r => ({ ...r, times: r.times.map((t, i) => (i === index ? time : t)) }));
 
-  const addReminderTime = () => {
-    const next = { ...reminder, times: [...reminder.times, '20:00'] };
-    setReminder(next);
-    saveReminder(next);
-  };
+  const addReminderTime = () =>
+    changeReminder(r => ({ ...r, times: [...r.times, '20:00'] }));
 
-  const removeReminderTime = (index: number) => {
-    const next = { ...reminder, times: reminder.times.filter((_, i) => i !== index) };
-    setReminder(next);
-    saveReminder(next);
-  };
+  const removeReminderTime = (index: number) =>
+    changeReminder(r => ({ ...r, times: r.times.filter((_, i) => i !== index) }));
 
   const totalCards = vocabSets.reduce((a, s) => a + (s.words?.length || 0), 0);
 
@@ -210,7 +209,7 @@ const Settings = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `vocab-sets-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `vocab-sets-${dayKey()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success('Sets exported');
@@ -251,7 +250,7 @@ const Settings = () => {
         createdAt: Date.now(),
         isKnown: false,
       }));
-      setVocabSets([...vocabSets, { id: `set-${Date.now()}`, name: setName, words, createdAt: Date.now() }]);
+      setVocabSets(prev => [...prev, { id: `set-${Date.now()}`, name: setName, words, createdAt: Date.now() }]);
       setJsonInput('');
       setJsonOpen(false);
       toast.success(`Imported ${words.length} words`);
@@ -264,10 +263,12 @@ const Settings = () => {
 
   const handleClearData = () => {
     if (!deleteDecks && !resetProgress) return;
+    // Deleting decks subsumes resetting progress: with no cards left there is
+    // no scheduling state to preserve, so clear both stores in either case.
     if (deleteDecks) {
       setVocabSets([]);
-    } else if (resetProgress) {
-      setVocabSets(vocabSets.map(s => ({
+    } else {
+      setVocabSets(prev => prev.map(s => ({
         ...s,
         words: s.words.map(w => ({
           ...w,
@@ -280,12 +281,10 @@ const Settings = () => {
         })),
       })));
     }
-    if (deleteDecks || resetProgress) {
-      try {
-        localStorage.removeItem('known-words');
-        localStorage.removeItem('study-sessions');
-      } catch { /* ignore */ }
-    }
+    try {
+      localStorage.removeItem('known-words');
+      localStorage.removeItem('study-sessions');
+    } catch { /* ignore */ }
     setDangerOpen(false);
     setDeleteDecks(false);
     setResetProgress(false);
@@ -303,7 +302,10 @@ const Settings = () => {
       {/* Header */}
       <header className="sticky top-0 z-30">
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -bottom-10 bg-background/30 backdrop-blur-[10px] [mask-image:linear-gradient(to_bottom,black_45%,transparent)]" />
-        <div className="relative container max-w-2xl mx-auto px-4 py-4 flex items-center gap-2">
+        <div
+          className="relative container max-w-2xl mx-auto px-4 py-4 flex items-center gap-2"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}
+        >
           <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -567,17 +569,20 @@ const Settings = () => {
                 <div className="text-xs text-muted-foreground">Removes every deck and its cards.</div>
               </label>
             </div>
-            <div className="flex items-start gap-3 rounded-xl border border-border p-3">
+            <div className={`flex items-start gap-3 rounded-xl border border-border p-3 ${deleteDecks ? 'opacity-50' : ''}`}>
               <Checkbox
                 id="danger-progress"
-                checked={resetProgress}
+                checked={resetProgress || deleteDecks}
+                disabled={deleteDecks}
                 onCheckedChange={(v) => setResetProgress(v === true)}
                 className="mt-0.5"
               />
-              <label htmlFor="danger-progress" className="flex-1 cursor-pointer">
+              <label htmlFor="danger-progress" className={`flex-1 ${deleteDecks ? '' : 'cursor-pointer'}`}>
                 <div className="text-sm font-medium text-foreground">Reset learning progress</div>
                 <div className="text-xs text-muted-foreground">
-                  Keeps your cards but clears review scheduling, known words, and study history.
+                  {deleteDecks
+                    ? 'Included automatically when decks are deleted.'
+                    : 'Keeps your cards but clears review scheduling, known words, and study history.'}
                 </div>
               </label>
             </div>
