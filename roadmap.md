@@ -1,0 +1,10 @@
+- [x] Remove the home top-bar reload icon.
+- [x] Fix and verify study progress counting across successive answers.
+- [x] Refine the search panel and verify soft top/bottom edges and full scrolling.
+- [x] Remove the redundant Word List header while retaining deck navigation.
+- [x] Compact Browser cards and limit editing to the pencil control.
+- [x] Verify Word List, Browser filters/editing, study auto-voice, and live AI categorization.
+- [ ] Repair Korean pronunciation across Study, Flashcard, and Word List, including asynchronous voice loading.
+- [ ] Autofocus the Search overlay input without changing close behavior.
+- [ ] Add independent deck/progress/both reset choices with explicit confirmation and safe dependent-data cleanup.
+- [ ] Run focused pronunciation, search, reset, and existing study/browser regression checks.

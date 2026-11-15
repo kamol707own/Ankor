@@ -1,0 +1,436 @@
+import { useState, useEffect } from 'react';
+import { Cloud, Upload, Search, Download, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { VocabSet, Document } from '@/types/word';
+import { toast } from 'sonner';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+
+interface CloudShareDialogProps {
+  vocabSets: VocabSet[];
+  onImport: (sets: VocabSet[]) => void;
+  trigger?: React.ReactNode;
+}
+
+interface CloudSet {
+  id: string;
+  username: string;
+  set_name: string;
+  data: any;
+  created_at: string;
+}
+
+// New rows store `data` as a JSON object ({ kind, words | documents }) so they
+// pass the table's RLS policy; older rows may still store a bare array.
+const extractWords = (data: any): VocabSet['words'] => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.words)) return data.words;
+  return [];
+};
+
+const extractDocuments = (data: any): Document[] => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.documents)) return data.documents;
+  return [];
+};
+
+const isNotesPayload = (data: any): boolean => {
+  if (Array.isArray(data?.documents)) return true;
+  return Array.isArray(data) && data.length > 0 && Boolean(data[0]?.title) && Boolean(data[0]?.content);
+};
+
+export const CloudShareDialog = ({ vocabSets, onImport, trigger }: CloudShareDialogProps) => {
+  const [username, setUsername] = useState('');
+  const [searchUsername, setSearchUsername] = useState('');
+  const [searchResults, setSearchResults] = useState<CloudSet[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedSet, setSelectedSet] = useState<string>('');
+  const [open, setOpen] = useState(false);
+  const [documents, setDocuments] = useLocalStorage<Document[]>('my-documents', []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    try {
+      const item = window.localStorage.getItem('my-documents');
+      if (item) {
+        setDocuments(JSON.parse(item));
+      }
+    } catch (error) {
+      console.error('Error syncing notes from localStorage:', error);
+    }
+  }, [open, setDocuments]);
+
+  const handleUpload = async () => {
+    if (!username.trim()) {
+      toast.error('Please enter your username');
+      return;
+    }
+
+    if (!selectedSet) {
+      toast.error('Please select a set to upload');
+      return;
+    }
+
+    const setToUpload = vocabSets.find((s) => s.id === selectedSet);
+    if (!setToUpload) return;
+
+    const cleanedUsername = username.trim().toLowerCase();
+
+    setIsUploading(true);
+    try {
+      // Re-upload replaces the old row: UPDATE isn't permitted by RLS, so delete then insert.
+      const { error: delError } = await supabase
+        .from('vocab_sets')
+        .delete()
+        .eq('username', cleanedUsername)
+        .eq('set_name', setToUpload.name);
+      if (delError) throw delError;
+
+      const { error: insertError } = await supabase.from('vocab_sets').insert([
+        {
+          username: cleanedUsername,
+          set_name: setToUpload.name,
+          data: { kind: 'deck', words: setToUpload.words } as any,
+        },
+      ]);
+
+      if (insertError) throw insertError;
+      toast.success(`☁️ "${setToUpload.name}" uploaded to cloud!`);
+      setSelectedSet('');
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Failed to upload set. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleUploadNotes = async () => {
+    if (!username.trim()) {
+      toast.error('Please enter your username');
+      return;
+    }
+
+    if (!documents.length) {
+      toast.error('You have no notes to upload');
+      return;
+    }
+
+    const cleanedUsername = username.trim().toLowerCase();
+
+    setIsUploading(true);
+    try {
+      // Replace the old notes row (UPDATE is blocked by RLS): delete then insert.
+      const { error: delError } = await supabase
+        .from('vocab_sets')
+        .delete()
+        .eq('username', cleanedUsername)
+        .eq('set_name', 'My Notes');
+      if (delError) throw delError;
+
+      const { error: insertError } = await supabase.from('vocab_sets').insert([
+        {
+          username: cleanedUsername,
+          set_name: 'My Notes',
+          data: { kind: 'notes', documents } as any,
+        },
+      ]);
+
+      if (insertError) throw insertError;
+      toast.success('☁️ Your notes uploaded to cloud!');
+    } catch (error) {
+      console.error('Upload notes error:', error);
+      toast.error('Failed to upload notes. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchUsername.trim()) {
+      toast.error('Please enter a username to search');
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const { data, error } = await supabase
+        .from('vocab_sets')
+        .select('*')
+        .eq('username', searchUsername.trim().toLowerCase())
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const allItems = (data || []) as CloudSet[];
+      const uniqueMap = new Map<string, CloudSet>();
+
+      for (const item of allItems) {
+        const key = `${item.username}-${item.set_name}`;
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, item);
+        }
+      }
+
+      const uniqueResults = Array.from(uniqueMap.values());
+      setSearchResults(uniqueResults);
+      
+      if (uniqueResults.length === 0) {
+        toast.info(`No sets found for "${searchUsername}"`);
+      } else {
+        toast.success(`Found ${uniqueResults.length} set(s) from ${searchUsername}`);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      toast.error('Failed to search. Please try again.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+  const isNotesCloudSet = (cloudSet: CloudSet) => isNotesPayload(cloudSet.data);
+
+  const importNotesFromCloud = (cloudSet: CloudSet) => {
+    try {
+      const cloudDocs = extractDocuments(cloudSet.data);
+      if (cloudDocs.length === 0) {
+        toast.error('No notes found in this item');
+        return;
+      }
+
+      const existingTitles = new Set(documents.map((d) => d.title.toLowerCase()));
+      const newDocs = cloudDocs
+        .filter((doc) => !existingTitles.has(doc.title.toLowerCase()))
+        .map((doc) => ({
+          ...doc,
+          id: doc.id || crypto.randomUUID(),
+          createdAt: doc.createdAt || Date.now(),
+          updatedAt: doc.updatedAt || Date.now(),
+        }));
+
+      if (newDocs.length === 0) {
+        toast.info('All notes are already in your collection');
+        return;
+      }
+
+      setDocuments([...documents, ...newDocs]);
+      toast.success(`Added ${newDocs.length} note(s) from "${cloudSet.set_name}"`);
+    } catch (error) {
+      console.error('Import notes error:', error);
+      toast.error('Failed to import notes');
+    }
+  };
+
+  const handleImportSet = (cloudSet: CloudSet) => {
+    try {
+      const newSet: VocabSet = {
+        id: `set-${Date.now()}-${Math.random()}`,
+        name: cloudSet.set_name,
+        words: extractWords(cloudSet.data),
+        createdAt: Date.now()
+      };
+
+      onImport([newSet]);
+      toast.success(`Added "${cloudSet.set_name}"!`);
+    } catch (error) {
+      toast.error('Failed to import set');
+    }
+  };
+
+  const handleImportAll = () => {
+    try {
+      const setCloudItems = searchResults.filter((cloudSet) => !isNotesCloudSet(cloudSet));
+      const newSets: VocabSet[] = setCloudItems.map(cloudSet => ({
+        id: `set-${Date.now()}-${Math.random()}`,
+        name: cloudSet.set_name,
+        words: extractWords(cloudSet.data),
+        createdAt: Date.now()
+      }));
+
+      if (newSets.length === 0) {
+        toast.info('No new sets to import');
+        return;
+      }
+
+      onImport(newSets);
+      toast.success(`Added all ${newSets.length} set(s)!`);
+      setSearchResults([]);
+      setSearchUsername('');
+    } catch (error) {
+      toast.error('Failed to import sets');
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {trigger ?? (
+          <Button variant="outline" size="sm">
+            <Cloud className="h-4 w-4 mr-2" />
+            Cloud Share
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[460px] p-0 overflow-hidden">
+        <div className="px-6 pt-6 pb-4 bg-gradient-to-b from-primary/5 to-transparent">
+          <DialogHeader>
+            <div className="mx-auto w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-2">
+              <Cloud className="h-6 w-6 text-primary" />
+            </div>
+            <DialogTitle className="text-center text-xl">Cloud Share</DialogTitle>
+            <DialogDescription className="text-center text-xs">
+              Sync your decks & notes across devices
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+
+        <div className="px-6 pb-6">
+          <Tabs defaultValue="upload" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 h-10 rounded-xl bg-muted/60">
+              <TabsTrigger value="upload" className="rounded-lg text-xs">
+                <Upload className="h-3.5 w-3.5 mr-1.5" />Upload
+              </TabsTrigger>
+              <TabsTrigger value="search" className="rounded-lg text-xs">
+                <Download className="h-3.5 w-3.5 mr-1.5" />Download
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="upload" className="space-y-4 mt-5">
+              <div className="space-y-1.5">
+                <Label htmlFor="username" className="text-xs text-muted-foreground">Your username</Label>
+                <Input
+                  id="username"
+                  placeholder=""
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="rounded-xl h-11 bg-muted/60 border-0"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="set-select" className="text-xs text-muted-foreground">Pick a deck</Label>
+                <Select value={selectedSet} onValueChange={setSelectedSet}>
+                  <SelectTrigger id="set-select" className="h-11 rounded-xl bg-muted/60 border-0">
+                    <SelectValue placeholder="Choose a deck…" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    {vocabSets.map(set => (
+                      <SelectItem key={set.id} value={set.id} className="rounded-lg">
+                        {set.name} · {set.words.length} cards
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button
+                onClick={handleUpload}
+                disabled={isUploading || !username || !selectedSet}
+                className="w-full h-11 rounded-xl"
+              >
+                {isUploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                Upload deck
+              </Button>
+
+              <div className="pt-4 border-t border-border/60">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-sm font-medium">My Notes</p>
+                    <p className="text-xs text-muted-foreground">{documents.length} document{documents.length === 1 ? '' : 's'}</p>
+                  </div>
+                  <Button
+                    onClick={handleUploadNotes}
+                    disabled={isUploading || !username || !documents.length}
+                    variant="outline"
+                    size="sm"
+                    className="rounded-lg"
+                  >
+                    {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Upload className="h-3.5 w-3.5 mr-1.5" />Upload</>}
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="search" className="space-y-4 mt-5">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Search by username</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder=""
+                    value={searchUsername}
+                    onChange={(e) => setSearchUsername(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    className="rounded-xl h-11 bg-muted/60 border-0"
+                  />
+                  <Button onClick={handleSearch} disabled={isSearching} className="rounded-xl h-11 px-4">
+                    {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              {searchResults.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      {searchResults.length} item{searchResults.length === 1 ? '' : 's'}
+                    </p>
+                    <Button onClick={handleImportAll} variant="ghost" size="sm" className="h-8 text-xs">
+                      <Download className="h-3.5 w-3.5 mr-1.5" />Add all decks
+                    </Button>
+                  </div>
+
+                  <ScrollArea className="h-[260px] -mx-1 px-1">
+                    <div className="space-y-2">
+                      {searchResults.map((cloudSet) => {
+                        const isNotes = isNotesCloudSet(cloudSet);
+                        const itemCount = Array.isArray(cloudSet.data) ? cloudSet.data.length : 0;
+                        return (
+                          <div
+                            key={cloudSet.id}
+                            className="flex items-center justify-between p-3 rounded-xl bg-muted/40 hover:bg-muted/70 transition-colors"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">{cloudSet.set_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {itemCount} {isNotes ? 'notes' : 'cards'}
+                              </p>
+                            </div>
+                            <Button
+                              onClick={() => (isNotes ? importNotesFromCloud(cloudSet) : handleImportSet(cloudSet))}
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 rounded-lg shrink-0"
+                            >
+                              <Download className="h-3.5 w-3.5 mr-1.5" />
+                              Add
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
