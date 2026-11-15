@@ -17,6 +17,7 @@ const VOICE_WAIT_MS = 1500;
 
 let activeRequest = 0;
 let cancelVoiceWait: (() => void) | undefined;
+let activeAudio: HTMLAudioElement | undefined;
 
 // The Web Speech API exposes no gender field, so we infer it from the voice
 // name. Female is checked first because "female" contains "male", and several
@@ -97,9 +98,58 @@ export function cancelSpeech() {
   activeRequest += 1;
   cancelVoiceWait?.();
   cancelVoiceWait = undefined;
+  if (activeAudio) {
+    try { activeAudio.pause(); } catch { /* ignore */ }
+    activeAudio = undefined;
+  }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     window.speechSynthesis.cancel();
   }
+}
+
+/**
+ * Fallback for devices with no installed voice for the language (common on
+ * Android without the Korean TTS pack). Uses Google's public TTS audio, which
+ * needs no CORS header because it plays through an <audio> element.
+ */
+function playRemoteTts(
+  text: string,
+  language: string,
+  onStart?: () => void,
+  onEnd?: () => void,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const lang = language.split('-')[0];
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${lang}&q=${encodeURIComponent(text)}`;
+    const audio = new Audio(url);
+    activeAudio = audio;
+    let started = false;
+
+    audio.onplaying = () => {
+      started = true;
+      onStart?.();
+    };
+    audio.onended = () => {
+      if (activeAudio === audio) activeAudio = undefined;
+      onEnd?.();
+      resolve(true);
+    };
+    audio.onerror = () => {
+      if (activeAudio === audio) activeAudio = undefined;
+      resolve(false);
+    };
+    audio.play().catch(() => {
+      if (activeAudio === audio) activeAudio = undefined;
+      resolve(false);
+    });
+
+    window.setTimeout(() => {
+      if (!started) {
+        if (activeAudio === audio) activeAudio = undefined;
+        resolve(false);
+      }
+    }, 8000);
+  });
 }
 
 async function waitForVoice(
@@ -155,6 +205,8 @@ export async function speakText(text: string, options: SpeechOptions = {}): Prom
   const requestedBase = language.toLowerCase().split('-')[0];
   const voiceBase = voice ? voice.lang.toLowerCase().split('-')[0] : '';
   if (!voice || voiceBase !== requestedBase) {
+    const played = await playRemoteTts(term, language, options.onStart, options.onEnd);
+    if (played) return true;
     options.onError?.(
       `No ${language} voice found. Install a ${language} text-to-speech voice in your device settings.`,
     );
