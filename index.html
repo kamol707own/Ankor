@@ -4,12 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
+    <!--
+      Google's public TTS endpoint (the pronunciation fallback for devices with
+      no Korean voice installed) rejects any request that carries a non-Google
+      Referer header, which browsers attach to <audio> loads. Stripping the
+      referrer makes that fallback reachable; nothing in this app depends on it.
+    -->
+    <meta name="referrer" content="no-referrer" />
     <title>AnKor</title>
     <meta name="description" content="Master Korean vocabulary with beautiful flashcards" />
     <meta name="author" content="AnKor" />
-    <link rel="icon" type="image/png" sizes="512x512" href="/icon.png" />
-    <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Tab icon: a multi-size .ico plus exact-size, full-bleed 32/48px PNGs.
+         No 16px icon is declared — at that size the mark is unreadable. -->
+    <link rel="icon" href="/favicon.ico?v=3" sizes="16x16 32x32 48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=3" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png?v=3" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#292929" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#F7F3EC" media="(prefers-color-scheme: light)" />
@@ -40,7 +50,7 @@
       // build, then reload. Prevents the "old HTML + deleted CSS" unstyled page.
       (function () {
         try {
-          var KEY = 'ankor-cache-reset-v3';
+          var KEY = 'ankor-cache-reset-v4';
           if (localStorage.getItem(KEY)) return;
           localStorage.setItem(KEY, '1');
           var done = false;

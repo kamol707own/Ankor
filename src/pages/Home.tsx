@@ -156,7 +156,10 @@ const Home = () => {
           className="relative container max-w-2xl mx-auto px-4 py-4 flex items-center justify-between"
           style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}
         >
-          <h1 className="text-2xl font-bold text-foreground">AnKor</h1>
+          <div className="flex items-center gap-2.5">
+            <img src="/icon-192.png" alt="" className="h-9 w-9" aria-hidden />
+            <h1 className="text-2xl font-bold text-foreground">AnKor</h1>
+          </div>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" aria-label="Grammar notes" onClick={() => setNotesOpen(true)}>
               <NotebookPen className="h-5 w-5 text-muted-foreground" />

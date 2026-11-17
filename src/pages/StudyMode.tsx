@@ -8,7 +8,7 @@ import { VocabSet, Word } from '@/types/word';
 import { Button } from '@/components/ui/button';
 import { applyRating, previewIntervals, bucketCounts, dayKey, Rating } from '@/lib/srs';
 import { toast } from 'sonner';
-import { cancelSpeech, speakText } from '@/lib/speech';
+import { cancelSpeech, speakText, speechAllowedByGesture } from '@/lib/speech';
 
 interface StudySession { date: string; cards: number; minutes: number; }
 
@@ -151,10 +151,27 @@ const StudyMode = () => {
   useEffect(() => () => { cancelSpeech(); }, []);
 
   const [autoVoice, setAutoVoice] = useLS<boolean>('ankor-auto-voice', false);
+  // Browsers mute speech/media until the first gesture of the page load; flip
+  // this on that first gesture so auto-voice covers the current card instead
+  // of staying silent until the next one.
+  const [audioUnlocked, setAudioUnlocked] = useState(speechAllowedByGesture);
   useEffect(() => {
-    if (autoVoice && card) handleSpeak();
+    if (audioUnlocked) return;
+    const unlock = () => setAudioUnlocked(true);
+    window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('keydown', unlock, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, [audioUnlocked]);
+
+  useEffect(() => {
+    // Never auto-speak before that first gesture: the attempt is rejected by
+    // policy and would surface as an error toast on every reload.
+    if (autoVoice && card && audioUnlocked) handleSpeak();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [card?.id, autoVoice]);
+  }, [card?.id, autoVoice, audioUnlocked]);
 
   const toggleKnown = () => {
     if (!card) return;

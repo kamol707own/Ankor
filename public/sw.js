@@ -1,4 +1,4 @@
-const CACHE = 'ankor-v4';
+const CACHE = 'ankor-v8';
 // Only immutable, hashed-free static files are precached. The HTML shell is
 // deliberately NOT cached: a cached shell points at old asset hashes after a
 // deploy, which yields a completely unstyled page.
@@ -7,6 +7,9 @@ const ASSETS = [
   '/icon-512.png',
   '/icon-maskable-512.png',
   '/favicon.ico',
+  '/favicon-48x48.png',
+  '/favicon-32x32.png',
+  '/favicon.svg',
   '/apple-touch-icon.png',
 ];
 

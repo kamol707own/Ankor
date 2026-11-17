@@ -19,6 +19,22 @@ let activeRequest = 0;
 let cancelVoiceWait: (() => void) | undefined;
 let activeAudio: HTMLAudioElement | undefined;
 
+// Chrome blocks speechSynthesis and media playback until the user has
+// interacted with the page. Auto-voice right after a hard reload hits exactly
+// that ("not-allowed" / NotAllowedError) — a policy rejection, not broken
+// audio settings — so it must never surface as an error toast.
+let userActivated = false;
+if (typeof window !== 'undefined') {
+  const activate = () => { userActivated = true; };
+  window.addEventListener('pointerdown', activate, { capture: true, passive: true });
+  window.addEventListener('keydown', activate, { capture: true, passive: true });
+}
+
+/** Whether the page has seen a user gesture (pointer/keyboard) this load. */
+export function speechAllowedByGesture(): boolean {
+  return userActivated;
+}
+
 // The Web Speech API exposes no gender field, so we infer it from the voice
 // name. Female is checked first because "female" contains "male", and several
 // common female names (e.g. "Samantha") contain male-ish substrings.
@@ -111,45 +127,75 @@ export function cancelSpeech() {
  * Fallback for devices with no installed voice for the language (common on
  * Android without the Korean TTS pack). Uses Google's public TTS audio, which
  * needs no CORS header because it plays through an <audio> element.
+ *
+ * Two mirrors are tried in order: the googleapis.com one is the most reliable,
+ * translate.google.com is the fallback. Both 404 any request that carries a
+ * non-Google Referer header, which is why index.html sets a no-referrer policy.
  */
-function playRemoteTts(
-  text: string,
-  language: string,
+function remoteTtsUrls(text: string, language: string): string[] {
+  const lang = language.split('-')[0];
+  const q = encodeURIComponent(text);
+  return [
+    `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=${lang}&q=${q}`,
+    `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${lang}&q=${q}&ttsspeed=1&total=1&idx=0&textlen=${text.length}`,
+  ];
+}
+
+function playAudioUrl(
+  url: string,
   onStart?: () => void,
   onEnd?: () => void,
 ): Promise<boolean> {
   return new Promise((resolve) => {
-    const lang = language.split('-')[0];
-    const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${lang}&q=${encodeURIComponent(text)}`;
     const audio = new Audio(url);
     activeAudio = audio;
     let started = false;
+    let settled = false;
+
+    const finish = (result: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      audio.onplaying = audio.onended = audio.onerror = null;
+      if (activeAudio === audio) activeAudio = undefined;
+      if (!started) {
+        try { audio.pause(); } catch { /* ignore */ }
+      }
+      resolve(result);
+    };
 
     audio.onplaying = () => {
       started = true;
       onStart?.();
     };
     audio.onended = () => {
-      if (activeAudio === audio) activeAudio = undefined;
       onEnd?.();
-      resolve(true);
+      finish(true);
     };
-    audio.onerror = () => {
-      if (activeAudio === audio) activeAudio = undefined;
-      resolve(false);
-    };
-    audio.play().catch(() => {
-      if (activeAudio === audio) activeAudio = undefined;
-      resolve(false);
-    });
+    audio.onerror = () => finish(false);
+    // A newer request pauses this clip to replace it; settle immediately so the
+    // abandoned fallback loop can bail instead of retrying a stale word.
+    audio.onpause = () => { if (!audio.ended) finish(false); };
+    audio.play().catch(() => finish(false));
 
-    window.setTimeout(() => {
-      if (!started) {
-        if (activeAudio === audio) activeAudio = undefined;
-        resolve(false);
-      }
-    }, 8000);
+    // If nothing has started by the timeout the URL is unreachable or blocked.
+    const timeout = window.setTimeout(() => finish(false), 8000);
   });
+}
+
+async function playRemoteTts(
+  text: string,
+  language: string,
+  request: number,
+  onStart?: () => void,
+  onEnd?: () => void,
+): Promise<boolean> {
+  for (const url of remoteTtsUrls(text, language)) {
+    // Stop as soon as a newer speak request supersedes this one.
+    if (request !== activeRequest) return false;
+    if (await playAudioUrl(url, onStart, onEnd)) return true;
+  }
+  return false;
 }
 
 async function waitForVoice(
@@ -196,6 +242,12 @@ export async function speakText(text: string, options: SpeechOptions = {}): Prom
   cancelVoiceWait = undefined;
   // Cancel first so a previous card can never finish over the newly requested term.
   synthesis.cancel();
+  if (activeAudio) {
+    // A remote fallback clip may still be playing; stop it too, otherwise rapid
+    // taps stack two pronunciations on top of each other.
+    try { activeAudio.pause(); } catch { /* ignore */ }
+    activeAudio = undefined;
+  }
 
   const voice = await waitForVoice(language, gender, request);
   if (request !== activeRequest) return false;
@@ -205,8 +257,11 @@ export async function speakText(text: string, options: SpeechOptions = {}): Prom
   const requestedBase = language.toLowerCase().split('-')[0];
   const voiceBase = voice ? voice.lang.toLowerCase().split('-')[0] : '';
   if (!voice || voiceBase !== requestedBase) {
-    const played = await playRemoteTts(term, language, options.onStart, options.onEnd);
+    const played = await playRemoteTts(term, language, request, options.onStart, options.onEnd);
     if (played) return true;
+    // Pre-gesture, browsers block the fallback audio too — stay quiet rather
+    // than blaming voice settings for a policy rejection.
+    if (!speechAllowedByGesture()) return false;
     options.onError?.(
       `No ${language} voice found. Install a ${language} text-to-speech voice in your device settings.`,
     );
@@ -227,8 +282,10 @@ export async function speakText(text: string, options: SpeechOptions = {}): Prom
   utterance.onerror = event => {
     if (request !== activeRequest) return;
     options.onEnd?.();
-    // Browsers report intentional cancellation as an error; it is not a playback failure.
-    if (event.error !== 'canceled' && event.error !== 'interrupted') {
+    // Browsers report intentional cancellation as an error, and "not-allowed"
+    // is the pre-gesture autoplay policy — neither is a playback failure.
+    const benign = event.error === 'canceled' || event.error === 'interrupted' || event.error === 'not-allowed';
+    if (!benign) {
       options.onError?.('This word could not be played. Check your browser audio and speech voice settings.');
     }
   };
